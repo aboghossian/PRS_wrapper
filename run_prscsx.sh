@@ -33,8 +33,10 @@ done
 # environment with PRS-CSx dependencies
 source /wynton/home/weiss/aboghossian/PRScsx/prscsx_env/bin/activate
 
+# loop through phi values (suggested default from PRS-CSx)
 for phi in 1e-6 1e-4 1e-2 1;
 do
+  # run PRS-CSx
   python /wynton/home/weiss/aboghossian/PRScsx/PRScsx.py \
     --ref_dir $ref_dir \
     --bim_prefix $bim \
