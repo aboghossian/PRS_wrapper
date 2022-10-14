@@ -9,6 +9,7 @@
 #$ -l mem_free=20G
 #$ -l h_rt=6:00:00
 #$ -t 1-22
+# Runs PRS-CSx in parallel for all 22 autosomes
 
 # read in arguments
 while getopts ":r:b:g:p:n:d:o:" arg; do

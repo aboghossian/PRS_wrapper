@@ -1,4 +1,5 @@
 #!/bin/bash
+# Concatenates PRS-CSx results by phi value (single ancestry)
 in_dir=$1  # input directory
 phis=$2  # phi values (separated by comma)
 
