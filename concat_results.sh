@@ -10,5 +10,5 @@ for phi in $phis_split; do
     echo $phi
 
     # concatenate files with that value in name
-    cat "$in_dir/*pst\_eff*$phi*.txt" > "$in_dir/$phi\_merged.txt"
+    cat $in_dir/*pst\_eff*$phi*.txt > $in_dir/$phi\_merged.txt
 done
