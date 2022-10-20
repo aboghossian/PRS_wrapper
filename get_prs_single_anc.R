@@ -30,14 +30,17 @@ phenotype <- fread(args$pheno) %>%
   dplyr::select(all_of(c("FID", "IID", args$pheno_col))) %>%
   dplyr::filter(!is.na(.data[[args$pheno_col]]))
 
-# covariates (requires Ma_Educ, MA_AGE, SEX, BOY, and PC1-10)
+# check phenotype type (binary, continuous)
+n_phenotypes <- n_distinct(phenotype[, 3])
+
+# covariates
 covars <- fread("/wynton/group/weiss/AndrewB/IMPaCT_final/IMPaCT_pheno.txt")
 
 # model formulas from vars
 model_formula <- as.formula(paste(args$pheno_col,
                                   "~ SCORE1_SUM + Ma_Educ + MA_AGE + SEX + as.factor(BOY) + PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10"))
 null_formula <- as.formula(paste(args$pheno_col,
-                                  "~ Ma_Educ + MA_AGE + SEX + as.factor(BOY) + PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10"))
+                                 "~ Ma_Educ + MA_AGE + SEX + as.factor(BOY) + PC1 + PC2 + PC3 + PC4 + PC5 + PC6 + PC7 + PC8 + PC9 + PC10"))
 
 # scores
 score_files <- list.files(args$in_dir, ".sscore", full.names = T)
@@ -54,53 +57,78 @@ val_subset <- phenotype %>%
   dplyr::inner_join(individuals)
 
 # loop through and calculate in sample R2
-scores <- list()  # stores results
-print("Finding best phi value...")
+scores <- list()
 for (i in 1:length(score_files)) {
   
-  # join with phenotype and covariates
+  # model data frame
   score_df <- fread(score_files[[i]]) %>%
     dplyr::rename(FID = "#FID") %>%
     dplyr::inner_join(phenotype) %>%
     dplyr::inner_join(covars)
   
-  # get validation set
+  # model validation subset
   score_val <- score_df %>%
     dplyr::inner_join(val_subset)
   
-  # within val fit
-  score_fit <- glm(data = score_val,
-                   formula = model_formula)
-  
-  # add R2 and score df to results list
-  r2 <- pscl::pR2(score_fit)[["McFadden"]]  # pseudo R2 for logistic regression
-  scores[[i]] <- list(score = score_df, r2 = r2)
+  if (n_phenotypes == 2) {
+    # binary case => binomial model
+    score_fit <- glm(data = score_val,
+                     formula = model_formula,
+                     family = "binomial")
+    
+    r2 <- pscl::pR2(score_fit)[["McFadden"]]
+    scores[[i]] <- list(score = score_df, r2 = r2)
+  } else {
+    # continuous case => linear model
+    score_fit <- lm(data = score_val,
+                    formula = model_formula)
+    
+    r2 <- summary(score_fit)$r.squared
+    scores[[i]] <- list(score = score_df, r2 = r2)
+  }
 }
 
-# find the maximum R2 and associated score
+# find maximum in validation R2
 best <- which.max(purrr::map(scores, 2) %>% unlist())
 best_score <- scores[[best]]$score
 
-# write score file to output directory with given name
+# write best score to file
 write_delim(best_score %>% dplyr::select(FID, IID, SCORE1_SUM),
             file.path(args$out_dir, args$name),
             delim = "\t")
-# output best R2 to console
 print(paste("The best in sample R2 was",
             scores[[best]]$r2,
             "from",
             score_files[[best]]))
 
-# fit full sample model with best PRS (phi optimized)
 print("Fitting full model...")
-best_full_fit <- glm(data = best_score,
-                     formula = model_formula)
-summary(best_full_fit)
-
-# null fit
-null_full_fit <- glm(data = best_score,
-                     formula = null_formula)
-
-# gained R2 = fill - null (what does PRS add)
-print("Gained R2 in full data set was:")
-pscl::pR2(best_full_fit) - pscl::pR2(null_full_fit)
+if (n_phenotypes == 2) {
+  # binary case
+  best_full_fit <- glm(data = best_score,
+                       formula = model_formula,
+                       family = "binomial")
+  summary(best_full_fit)  # model summary (coefficients)
+  
+  # null model (-score)
+  null_full_fit <- glm(data = best_score,
+                       formula = null_formula,
+                       family = "binomial")
+  
+  # gain over null
+  print("Gained R2 in full data set was:")
+  pscl::pR2(best_full_fit) - pscl::pR2(null_full_fit)
+  
+} else {
+  # continuous case
+  best_full_fit <- lm(data = best_score,
+                      formula = model_formula)
+  summary(best_full_fit)  # model summary (coefficients)
+  
+  # null model (-score)
+  null_full_fit <- lm(data = best_score,
+                      formula = null_formula)
+  
+  # gain over null
+  print("Gained R2 in full data set was:")
+  summary(best_full_fit)$r.squared - summary(null_full_fit)$r.squared
+}
