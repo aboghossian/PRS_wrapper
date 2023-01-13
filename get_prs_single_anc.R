@@ -53,8 +53,11 @@ individuals <- fread(score_files[[1]]) %>%
 
 # make validation subset
 val_subset <- phenotype %>%
-  dplyr::sample_frac(size = as.numeric(args$val_prop)) %>%
-  dplyr::inner_join(individuals)
+  dplyr::inner_join(individuals) %>%
+  dplyr::sample_frac(size = as.numeric(args$val_prop))
+
+print(paste("There are", nrow(individuals), "total individuals"))
+print(paste(nrow(val_subset), "will be used for validation"))
 
 # loop through and calculate in sample R2
 scores <- list()
